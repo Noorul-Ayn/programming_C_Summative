@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <stdlib.h>
 
 #define NUM_INTERSECTIONS  2
@@ -27,146 +26,112 @@ typedef struct {
 
 Intersection* intersections[NUM_INTERSECTIONS];
 
-Intersection* createIntersection(const char* name, uint8_t rPin, uint8_t yPin, uint8_t gPin, uint8_t btnPin);
-void  initIntersection(Intersection* inter, bool startGreen);
-void  setSignal(Intersection* inter, uint8_t newState);
-void  detectVehicle(Intersection* inter);
-void  updateIntersection(Intersection* inter, Intersection* opposing);
-void  logStatus(Intersection* inter);
-void  printAllStatus(void);
-void  printMenu(void);
-void  handleSerialMenu(void);
-bool  isValidState(uint8_t state);
-void  freeAllIntersections(void);
+void setupIntersection(int idx, const char* name, uint8_t rPin, uint8_t yPin, uint8_t gPin, uint8_t btnPin) {
+  intersections[idx] = (Intersection*) malloc(sizeof(Intersection));
+  if (intersections[idx] == NULL) return;
 
-void setup() {
-  Serial.begin(9600);
-  while (!Serial);
+  intersections[idx]->name            = name;
+  intersections[idx]->redPin          = rPin;
+  intersections[idx]->yellowPin       = yPin;
+  intersections[idx]->greenPin        = gPin;
+  intersections[idx]->buttonPin       = btnPin;
+  intersections[idx]->state           = STATE_RED;
+  intersections[idx]->vehicleCount    = 0;
+  intersections[idx]->lastChangeTime  = 0;
+  intersections[idx]->greenDuration   = BASE_GREEN_MS;
+  intersections[idx]->manualOverride  = false;
+  intersections[idx]->vehicleDetected = false;
 
-  Serial.println("TRAFFIC CONTROLLER START");
+  pinMode(intersections[idx]->redPin,    OUTPUT);
+  pinMode(intersections[idx]->yellowPin, OUTPUT);
+  pinMode(intersections[idx]->greenPin,  OUTPUT);
+  pinMode(intersections[idx]->buttonPin, INPUT_PULLUP);
 
-  intersections[0] = createIntersection("A", 2, 3, 4, 7);
-  intersections[1] = createIntersection("B", 8, 9, 10, 11);
+  digitalWrite(intersections[idx]->redPin,    LOW);
+  digitalWrite(intersections[idx]->yellowPin, LOW);
+  digitalWrite(intersections[idx]->greenPin,  LOW);
+}
 
-  for (int i = 0; i < NUM_INTERSECTIONS; i++) {
-    if (intersections[i] == NULL) {
-      while (1);
-    }
+bool isValidState(uint8_t state) {
+  return (state == STATE_RED || state == STATE_GREEN || state == STATE_YELLOW);
+}
+
+void logStatus(int idx) {
+  const char* s;
+  switch (intersections[idx]->state) {
+    case STATE_RED:    s = "RED";    break;
+    case STATE_GREEN:  s = "GREEN";  break;
+    case STATE_YELLOW: s = "YELLOW"; break;
+    default:           s = "???";
   }
-
-  initIntersection(intersections[0], true);
-  initIntersection(intersections[1], false);
-
-  printMenu();
+  Serial.print(intersections[idx]->name);
+  Serial.print(": ");
+  Serial.print(s);
+  Serial.print(" | Count: ");
+  Serial.println(intersections[idx]->vehicleCount);
 }
 
-void loop() {
-  for (int i = 0; i < NUM_INTERSECTIONS; i++) {
-    detectVehicle(intersections[i]);
-  }
-
-  updateIntersection(intersections[0], intersections[1]);
-  updateIntersection(intersections[1], intersections[0]);
-
-  if (Serial.available() > 0) {
-    handleSerialMenu();
-  }
-}
-
-Intersection* createIntersection(const char* name, uint8_t rPin, uint8_t yPin, uint8_t gPin, uint8_t btnPin) {
-  Intersection* inter = (Intersection*) malloc(sizeof(Intersection));
-  if (inter == NULL) return NULL;
-
-  inter->name            = name;
-  inter->redPin          = rPin;
-  inter->yellowPin       = yPin;
-  inter->greenPin        = gPin;
-  inter->buttonPin       = btnPin;
-  inter->state           = STATE_RED;
-  inter->vehicleCount    = 0;
-  inter->lastChangeTime  = 0;
-  inter->greenDuration   = BASE_GREEN_MS;
-  inter->manualOverride  = false;
-  inter->vehicleDetected = false;
-
-  pinMode(inter->redPin,    OUTPUT);
-  pinMode(inter->yellowPin, OUTPUT);
-  pinMode(inter->greenPin,  OUTPUT);
-  pinMode(inter->buttonPin, INPUT_PULLUP);
-
-  digitalWrite(inter->redPin,    LOW);
-  digitalWrite(inter->yellowPin, LOW);
-  digitalWrite(inter->greenPin,  LOW);
-
-  return inter;
-}
-
-void initIntersection(Intersection* inter, bool startGreen) {
-  if (inter == NULL) return;
-  setSignal(inter, startGreen ? STATE_GREEN : STATE_RED);
-}
-
-void setSignal(Intersection* inter, uint8_t newState) {
-  if (inter == NULL) return;
+void setSignal(int idx, uint8_t newState) {
   if (!isValidState(newState)) return;
 
-  inter->state = newState;
+  intersections[idx]->state = newState;
 
-  digitalWrite(inter->redPin,    LOW);
-  digitalWrite(inter->yellowPin, LOW);
-  digitalWrite(inter->greenPin,  LOW);
+  digitalWrite(intersections[idx]->redPin,    LOW);
+  digitalWrite(intersections[idx]->yellowPin, LOW);
+  digitalWrite(intersections[idx]->greenPin,  LOW);
 
   switch (newState) {
-    case STATE_RED:    digitalWrite(inter->redPin,    HIGH); break;
-    case STATE_YELLOW: digitalWrite(inter->yellowPin, HIGH); break;
-    case STATE_GREEN:  digitalWrite(inter->greenPin,  HIGH); break;
+    case STATE_RED:    digitalWrite(intersections[idx]->redPin,    HIGH); break;
+    case STATE_YELLOW: digitalWrite(intersections[idx]->yellowPin, HIGH); break;
+    case STATE_GREEN:  digitalWrite(intersections[idx]->greenPin,  HIGH); break;
   }
 
-  inter->lastChangeTime = millis();
-  logStatus(inter);
+  intersections[idx]->lastChangeTime = millis();
+  logStatus(idx);
 }
 
-void detectVehicle(Intersection* inter) {
-  if (inter == NULL || inter->manualOverride) return;
+void detectVehicle(int idx) {
+  if (intersections[idx]->manualOverride) return;
 
-  bool pressed = (digitalRead(inter->buttonPin) == LOW);
+  bool pressed = (digitalRead(intersections[idx]->buttonPin) == LOW);
 
-  if (pressed && !inter->vehicleDetected) {
-    inter->vehicleDetected = true;
-    inter->vehicleCount++;
+  if (pressed && !intersections[idx]->vehicleDetected) {
+    intersections[idx]->vehicleDetected = true;
+    intersections[idx]->vehicleCount++;
 
-    if (inter->state == STATE_GREEN) {
-      uint32_t extended = inter->greenDuration + EXTENSION_MS;
-      inter->greenDuration = (extended > MAX_GREEN_MS) ? MAX_GREEN_MS : extended;
-      Serial.print("Vehicle at "); Serial.print(inter->name);
-      Serial.print(" - Count: "); Serial.println(inter->vehicleCount);
+    if (intersections[idx]->state == STATE_GREEN) {
+      uint32_t extended = intersections[idx]->greenDuration + EXTENSION_MS;
+      intersections[idx]->greenDuration = (extended > MAX_GREEN_MS) ? MAX_GREEN_MS : extended;
+      Serial.print("Vehicle at "); Serial.print(intersections[idx]->name);
+      Serial.print(" - Count: "); Serial.println(intersections[idx]->vehicleCount);
     } else {
-      Serial.print("Vehicle waiting at "); Serial.println(inter->name);
+      Serial.print("Vehicle waiting at "); Serial.println(intersections[idx]->name);
     }
 
   } else if (!pressed) {
-    inter->vehicleDetected = false;
+    intersections[idx]->vehicleDetected = false;
   }
 }
 
-void updateIntersection(Intersection* inter, Intersection* opposing) {
-  if (inter == NULL || inter->manualOverride) return;
+void updateIntersection(int idx, int opposingIdx) {
+  if (intersections[idx]->manualOverride) return;
 
-  uint32_t elapsed = millis() - inter->lastChangeTime;
+  uint32_t elapsed = millis() - intersections[idx]->lastChangeTime;
 
-  switch (inter->state) {
+  switch (intersections[idx]->state) {
     case STATE_GREEN:
-      if (elapsed >= inter->greenDuration) {
-        inter->greenDuration = BASE_GREEN_MS;
-        setSignal(inter, STATE_YELLOW);
+      if (elapsed >= intersections[idx]->greenDuration) {
+        intersections[idx]->greenDuration = BASE_GREEN_MS;
+        setSignal(idx, STATE_YELLOW);
       }
       break;
 
     case STATE_YELLOW:
       if (elapsed >= YELLOW_MS) {
-        setSignal(inter, STATE_RED);
-        if (opposing != NULL && opposing->state == STATE_RED && !opposing->manualOverride) {
-          setSignal(opposing, STATE_GREEN);
+        setSignal(idx, STATE_RED);
+        if (intersections[opposingIdx]->state == STATE_RED &&
+            !intersections[opposingIdx]->manualOverride) {
+          setSignal(opposingIdx, STATE_GREEN);
         }
       }
       break;
@@ -176,42 +141,20 @@ void updateIntersection(Intersection* inter, Intersection* opposing) {
   }
 }
 
-void logStatus(Intersection* inter) {
-  if (inter == NULL) return;
-
-  const char* stateStr;
-  switch (inter->state) {
-    case STATE_RED:    stateStr = "RED"; break;
-    case STATE_GREEN:  stateStr = "GREEN"; break;
-    case STATE_YELLOW: stateStr = "YELLOW"; break;
-    default:           stateStr = "???";
-  }
-
-  Serial.print(inter->name);
-  Serial.print(": ");
-  Serial.print(stateStr);
-  Serial.print(" | Count: ");
-  Serial.println(inter->vehicleCount);
-}
-
 void printAllStatus(void) {
   Serial.println("\n--- STATUS ---");
   for (int i = 0; i < NUM_INTERSECTIONS; i++) {
-    Intersection* inter = intersections[i];
-    const char* stateStr;
-    switch (inter->state) {
-      case STATE_RED:    stateStr = "RED"; break;
-      case STATE_GREEN:  stateStr = "GREEN"; break;
-      case STATE_YELLOW: stateStr = "YELLOW"; break;
-      default:           stateStr = "???";
+    const char* s;
+    switch (intersections[i]->state) {
+      case STATE_RED:    s = "RED";    break;
+      case STATE_GREEN:  s = "GREEN";  break;
+      case STATE_YELLOW: s = "YELLOW"; break;
+      default:           s = "???";
     }
-    Serial.print(inter->name);
-    Serial.print(": ");
-    Serial.print(stateStr);
-    Serial.print(" | Vehicles: ");
-    Serial.print(inter->vehicleCount);
-    Serial.print(" | Override: ");
-    Serial.println(inter->manualOverride ? "ON" : "OFF");
+    Serial.print(intersections[i]->name);
+    Serial.print(": "); Serial.print(s);
+    Serial.print(" | Vehicles: "); Serial.print(intersections[i]->vehicleCount);
+    Serial.print(" | Override: "); Serial.println(intersections[i]->manualOverride ? "ON" : "OFF");
   }
   Serial.println("--------------\n");
 }
@@ -224,12 +167,11 @@ void printMenu(void) {
   Serial.println("4: Force A Green");
   Serial.println("5: Force B Green");
   Serial.println("6: Reset Counts");
-  Serial.println("7: Menu\n");
+  Serial.println("7: Menu");
 }
 
 void handleSerialMenu(void) {
   char cmd = (char) Serial.read();
-
   switch (cmd) {
     case '1': printAllStatus(); break;
     case '2':
@@ -242,14 +184,14 @@ void handleSerialMenu(void) {
       break;
     case '4':
       if (intersections[0]->manualOverride) {
-        setSignal(intersections[0], STATE_GREEN);
-        setSignal(intersections[1], STATE_RED);
+        setSignal(0, STATE_GREEN);
+        setSignal(1, STATE_RED);
       }
       break;
     case '5':
       if (intersections[1]->manualOverride) {
-        setSignal(intersections[1], STATE_GREEN);
-        setSignal(intersections[0], STATE_RED);
+        setSignal(1, STATE_GREEN);
+        setSignal(0, STATE_RED);
       }
       break;
     case '6':
@@ -260,16 +202,32 @@ void handleSerialMenu(void) {
   }
 }
 
-bool isValidState(uint8_t state) {
-  return (state == STATE_RED || state == STATE_GREEN || state == STATE_YELLOW);
+void setup() {
+  Serial.begin(9600);
+  Serial.println("TRAFFIC CONTROLLER START");
+
+  setupIntersection(0, "A", 2, 3, 4, 7);
+  setupIntersection(1, "B", 8, 9, 10, 11);
+
+  for (int i = 0; i < NUM_INTERSECTIONS; i++) {
+    if (intersections[i] == NULL) { while (1); }
+  }
+
+  setSignal(0, STATE_GREEN);
+  setSignal(1, STATE_RED);
+
+  printMenu();
 }
 
-void freeAllIntersections(void) {
+void loop() {
   for (int i = 0; i < NUM_INTERSECTIONS; i++) {
-    if (intersections[i] != NULL) {
-      free(intersections[i]);
-      intersections[i] = NULL;
-    }
+    detectVehicle(i);
+  }
+
+  updateIntersection(0, 1);
+  updateIntersection(1, 0);
+
+  if (Serial.available() > 0) {
+    handleSerialMenu();
   }
 }
-
