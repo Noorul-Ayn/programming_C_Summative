@@ -55,7 +55,7 @@ using Arduino (simulated in Tinkercad) and a PCB design in EasyEDA.
 Tinkercad simulation link: https://www.tinkercad.com/things/gWnlGV59JuB/editel?returnTo=%2Fdashboard
 
 ## PCB Design
-EasyEDA project link: [ADD YOUR EASYEDA LINK HERE]
+EasyEDA project link: https://easyeda.com/editor#id=|1963dc70158c4adb84c98f25cdef9e51|f191d3afe65449969872d868b7ba2646
 
 ## How to Run
 1. Open Tinkercad simulation link
