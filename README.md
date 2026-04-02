@@ -72,3 +72,115 @@ EasyEDA project link: [ADD YOUR EASYEDA LINK HERE]
 - State machines
 - Serial communication
 - Basic error handling
+
+
+# Project 4: Data Analysis Toolkit Using Function Pointers and Callbacks
+
+## Description
+A data analysis toolkit implemented in C that processes numerical datasets
+using function pointers and callback functions. Operations are dynamically
+dispatched at runtime through a structured function pointer table, avoiding
+long conditional chains.
+
+## Code Structure and Documentation
+
+### Dispatcher Logic
+The program uses a `MenuItem` array where each entry contains:
+- A label string shown in the menu
+- A function pointer `void (*fn)(Dataset*)` pointing to the operation
+```c
+MenuItem menu[] = {
+    { "Add values to dataset",   op_add_values  },
+    { "Compute sum and average", op_sum_avg     },
+    { "Sort ascending",          op_sort_asc    },
+    ...
+};
+```
+
+The dispatcher loop calls `menu[idx].fn(d)` directly based on user input.
+No if/else or switch chain is used. Adding a new operation requires only
+a new row in the array.
+
+### Callback Function Usage
+Three callback types are defined as typedefs:
+
+| Type | Signature | Purpose |
+|------|-----------|---------|
+| `FilterFunc` | `int (*)(DataType)` | Returns 1 if value passes filter |
+| `TransformFunc` | `DataType (*)(DataType)` | Returns transformed value |
+| `CompareFunc` | `int (*)(const void*, const void*)` | Used by qsort |
+
+**Filter callbacks:**
+- `filter_above_threshold` — keeps values above user-defined threshold
+- `filter_below_threshold` — keeps values below user-defined threshold
+- `filter_positive` — keeps only positive values
+- `filter_negative` — keeps only negative values
+
+**Transform callbacks:**
+- `transform_square` — squares each value
+- `transform_sqrt` — square root of each value
+- `transform_scale` — multiplies by user-defined factor
+- `transform_negate` — negates each value
+- `transform_normalize` — maps all values to [0,1] range
+
+**Comparison callbacks (passed to qsort):**
+- `compare_asc` — ascending order
+- `compare_desc` — descending order
+
+`apply_filter(d, fn, out)` iterates the dataset and calls the
+FilterFunc callback on each element, copying matches to output dataset.
+
+`apply_transform(d, fn)` iterates the dataset and replaces each
+element in-place with the result of the TransformFunc callback.
+
+`qsort()` receives `compare_asc` or `compare_desc` as a function
+pointer at runtime for flexible sorting direction.
+
+### Memory Management Strategy
+- Dataset is heap-allocated at startup via `malloc()`
+- `dataset_push()` calls `realloc()` to double capacity when full
+- Capacity doubling avoids repeated small allocations (amortized O(1))
+- `dataset_reset()` clears size without freeing memory for reuse
+- `dataset_free()` releases the internal data array
+- Temporary copies for median and statistics use `malloc()` + `free()`
+- All allocations are NULL-checked before use
+- All heap memory is released before program exit
+- NULL function pointer guard via `check_null_fn()` prevents crashes
+
+## Supported Operations
+1. Add values to dataset
+2. Display dataset
+3. Compute sum and average
+4. Find minimum and maximum
+5. Statistical summary (mean, median, std dev, variance, range)
+6. Sort ascending
+7. Sort descending
+8. Search for a value
+9. Filter dataset (4 filter callbacks)
+10. Apply transformation (5 transform callbacks)
+11. Load dataset from file
+12. Save dataset to file
+13. Reset dataset
+
+## Files
+- `data_toolkit.c` — Full source code
+- `dataset.txt` — Auto-saved dataset on exit
+
+## Compilation
+```bash
+gcc -o data_toolkit data_toolkit.c -lm
+```
+
+## Usage
+```bash
+./data_toolkit
+```
+
+## Key C Concepts Demonstrated
+- Function pointers and typedef'd callback signatures
+- Struct-based function pointer dispatch table
+- Dynamic memory with malloc/realloc/free
+- Callback-based generic algorithms (apply_filter, apply_transform)
+- qsort with custom comparator callbacks
+- File I/O with error handling
+- Input validation on all user entries
