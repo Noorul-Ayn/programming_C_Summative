@@ -1,0 +1,7 @@
+# URL: https://httpbin.org/uuid
+# Thread ID: 3
+# ----------------------------------------
+
+{
+  "uuid": "c80caf47-949a-46ea-8c0a-7ca2d18858af"
+}

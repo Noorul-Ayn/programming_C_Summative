@@ -1,0 +1,15 @@
+# URL: https://httpbin.org/get
+# Thread ID: 1
+# ----------------------------------------
+
+{
+  "args": {}, 
+  "headers": {
+    "Accept": "*/*", 
+    "Host": "httpbin.org", 
+    "User-Agent": "Mozilla/5.0 (C-WebScraper/1.0)", 
+    "X-Amzn-Trace-Id": "Root=1-69ce766d-2809d53f45afdf244abef971"
+  }, 
+  "origin": "41.186.136.171", 
+  "url": "https://httpbin.org/get"
+}
